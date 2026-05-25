@@ -9,7 +9,8 @@ persistence:
 minecraft:
   onlineMode: false
   type: PAPER
-  memory: 3G
+  memory: 58G
+  maxPlayers: 10
 
 backup:
   enabled: true
@@ -23,3 +24,12 @@ networkPolicy:
 
 podDisruptionBudget:
   enabled: true
+
+# 64 GB node (max standard-v3 4 vCPU): ~60 Gi allocatable − platform → 60 Gi pod, heap 58G
+resources:
+  requests:
+    cpu: "4"
+    memory: 60Gi
+  limits:
+    cpu: "4"
+    memory: 60Gi

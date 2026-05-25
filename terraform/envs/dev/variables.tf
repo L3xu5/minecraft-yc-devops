@@ -87,7 +87,7 @@ variable "minecraft_external_ip" {
 
 variable "enable_node_autoscaling" {
   type    = bool
-  default = true
+  default = false
 }
 
 variable "node_count_min" {
@@ -105,19 +105,10 @@ variable "enable_velero" {
   default = true
 }
 
-variable "enable_postgresql" {
-  type    = bool
-  default = true
-}
-
-variable "enable_cloud_function" {
-  type    = bool
-  default = true
-}
-
-variable "enable_api_gateway" {
-  type    = bool
-  default = true
+variable "node_preemptible" {
+  type        = bool
+  default     = true
+  description = "Preemptible worker VM — дешевле ~70%, возможны простои (YC останавливает VM)"
 }
 
 variable "tfstate_bucket_name" {

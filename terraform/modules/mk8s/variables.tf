@@ -89,3 +89,9 @@ variable "node_disk_type" {
   type    = string
   default = "network-ssd"
 }
+
+variable "node_preemptible" {
+  type        = bool
+  default     = false
+  description = "Preemptible worker VMs (~70% cheaper; YC may stop VM anytime, ~24h restart)"
+}

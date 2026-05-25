@@ -58,23 +58,6 @@ output "velero_secret_key" {
   sensitive = true
 }
 
-output "postgresql_host" {
-  value = var.enable_postgresql ? module.postgresql[0].host_fqdn : null
-}
-
-output "postgresql_password" {
-  value     = var.enable_postgresql ? local.postgres_password : null
-  sensitive = true
-}
-
-output "api_gateway_domain" {
-  value = var.enable_api_gateway && var.enable_cloud_function ? module.api_gateway[0].gateway_domain : null
-}
-
-output "cloud_function_url" {
-  value = var.enable_cloud_function ? module.cloud_function[0].function_url : null
-}
-
 output "next_steps" {
   value = <<-EOT
     Platform:

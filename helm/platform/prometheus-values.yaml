@@ -1,9 +1,9 @@
-# kube-prometheus-stack values (Grafana с LoadBalancer)
+# kube-prometheus-stack — Grafana только port-forward (квота NLB)
 grafana:
   enabled: true
   adminPassword: changeme-grafana
   service:
-    type: LoadBalancer
+    type: ClusterIP
     port: 80
   persistence:
     enabled: false

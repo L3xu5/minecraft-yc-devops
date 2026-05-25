@@ -72,17 +72,18 @@ helm repo add argo https://argoproj.github.io/argo-helm 2>/dev/null || true
 helm repo update argo
 helm upgrade --install argocd argo/argo-cd \
   -n argocd --create-namespace \
-  --set server.service.type=LoadBalancer \
+  --set server.service.type=ClusterIP \
   --wait --timeout 10m || echo "WARN: Argo CD optional"
 
 MC_IP="$(kubectl get svc minecraft -n minecraft -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo pending)"
-GRAF_IP="$(kubectl get svc -n monitoring kube-prometheus-grafana -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo pending)"
+echo ""
+echo "Grafana: kubectl port-forward -n monitoring svc/kube-prometheus-grafana 3000:80"
 
 echo ""
 echo "============================================"
 echo "Production v2 deployed"
 echo "Minecraft:  ${MC_IP}:25565"
-echo "Grafana:    http://${GRAF_IP}  (admin / changeme-grafana)"
+echo "Grafana:    kubectl port-forward -n monitoring svc/kube-prometheus-grafana 3000:80"
 echo "Logs:       Console → Logging → ${LOG_GROUP_ID}"
 echo "Image:      ${USE_REPO}:${USE_TAG}"
 echo "============================================"

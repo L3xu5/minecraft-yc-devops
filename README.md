@@ -2,151 +2,117 @@
 
 # Minecraft on Yandex Cloud Kubernetes
 
-**Production-grade DevOps lab:** один Minecraft-сервер (Paper), один общий мир, полный стек Yandex Cloud — от IaC до GitOps.
+Один Minecraft-сервер (Paper, offline mode) в **Managed Kubernetes** — DevOps-лаборатория: IaC, GitOps, секреты, бэкапы, observability. Каждая технология решает конкретную задачу.
 
 [![CI/CD](https://github.com/L3xu5/minecraft-yc-devops/actions/workflows/ci.yml/badge.svg)](https://github.com/L3xu5/minecraft-yc-devops/actions/workflows/ci.yml)
 ![OpenTofu](https://img.shields.io/badge/OpenTofu-1.5+-blue?logo=opentofu&logoColor=white)
 ![Kubernetes](https://img.shields.io/badge/Kubernetes-1.32-326CE5?logo=kubernetes&logoColor=white)
 ![Helm](https://img.shields.io/badge/Helm-3-0F1689?logo=helm&logoColor=white)
 ![Argo CD](https://img.shields.io/badge/Argo%20CD-GitOps-EF7B4D?logo=argo&logoColor=white)
-![Yandex Cloud](https://img.shields.io/badge/Yandex%20Cloud-Managed-5282FF)
 
-[Быстрый старт](#-быстрый-старт) · [Архитектура](#-архитектура) · [GitOps](#-gitops) · [CI/CD](#-cicd) · [Операции](#-операции)
+[Quick start](#quick-start) · [Architecture](#architecture) · [Best practices](#best-practices) · [Runbook](#runbook) · [Troubleshooting](#troubleshooting)
 
 </div>
 
+Репозиторий: [github.com/L3xu5/minecraft-yc-devops](https://github.com/L3xu5/minecraft-yc-devops)
+
 ---
 
-## 📋 О проекте
-
-Pet-project для практики DevOps: развёртывание Java-сервера Minecraft в **Yandex Cloud Managed Kubernetes** с инфраструктурой как код, секретами в Lockbox, автобэкапами, observability и полным CI/CD-конвейером.
+## О проекте
 
 | Принцип | Реализация |
 |---------|------------|
 | Один мир | `replicas: 1`, `strategy: Recreate`, PVC `ReadWriteOnce` |
 | Offline mode | `ONLINE_MODE=FALSE` — вход без лицензии Mojang |
-| GitOps-first | Argo CD — единственный источник правды для деплоя |
+| GitOps-first | Argo CD — единственный источник правды для деплоя приложений |
 | Secrets | Lockbox → External Secrets Operator, без секретов в git |
-| Immutable infra | OpenTofu modules, Helm charts, GitHub Actions |
+| Immutable delivery | CI → YCR; Argo CD синхронизирует манифесты из git |
+
+### Что намеренно не включено
+
+| Компонент | Причина |
+|-----------|---------|
+| Managed PostgreSQL | Не использовался приложением (~8 000 ₽/мес) |
+| Cloud Function + API Gateway | Status API не нужен; health — K8s / Grafana |
+| Публичные LB для Grafana/Argo | Экономия квоты NLB; доступ через `port-forward` |
+| Custom domain | Подключение по IP NLB |
 
 ---
 
-## 📑 Содержание
+## Содержание
 
-- [Стек технологий](#-стек-технологий)
-- [Архитектура](#-архитектура)
-- [Структура репозитория](#-структура-репозитория)
-- [Требования](#-требования)
-- [Быстрый старт](#-быстрый-старт)
-- [Endpoints](#-endpoints)
-- [GitOps](#-gitops)
-- [CI/CD](#-cicd)
-- [Бэкапы и DR](#-бэкапы-и-dr)
-- [Observability](#-observability)
-- [Terraform](#-terraform)
-- [Операции](#-операции)
-- [Безопасность](#-безопасность)
-- [Troubleshooting](#-troubleshooting)
-- [Стоимость и cleanup](#-стоимость-и-cleanup)
+- [Стек](#стек)
+- [Architecture](#architecture)
+- [Структура репозитория](#структура-репозитория)
+- [Требования](#требования)
+- [Quick start](#quick-start)
+- [Конфигурация Terraform](#конфигурация-terraform)
+- [Endpoints](#endpoints)
+- [GitOps](#gitops)
+- [CI/CD](#cicd)
+- [Бэкапы и DR](#бэкапы-и-dr)
+- [Observability](#observability)
+- [Best practices](#best-practices)
+- [Security](#security)
+- [Runbook](#runbook)
+- [Troubleshooting](#troubleshooting)
+- [Стоимость и cleanup](#стоимость-и-cleanup)
 
 ---
 
-## 🛠 Стек технологий
+## Стек
 
-<table>
-<tr>
-<td valign="top" width="50%">
-
-### Infrastructure & Cloud
-
-| Сервис | Назначение |
-|--------|------------|
-| **VPC + Security Groups** | Сеть, изоляция |
-| **Managed Kubernetes** | Оркестрация, autoscaling 1–2 nodes |
-| **Object Storage** | Бэкапы мира + Velero |
-| **Container Registry** | Кастомный образ сервера |
-| **Lockbox** | RCON, S3-ключи |
-| **Cloud Logging** | Централизованные логи |
-| **Managed PostgreSQL** | Метаданные / расширения |
-| **Cloud Function** | HTTP status API |
-| **API Gateway** | Публичный REST endpoint |
-
-</td>
-<td valign="top" width="50%">
-
-### Platform & Delivery
-
-| Сервис | Назначение |
-|--------|------------|
-| **Helm** | Minecraft chart + platform values |
-| **Argo CD** | GitOps, app-of-apps |
-| **External Secrets** | Sync Lockbox → K8s |
-| **Fluent Bit** | Log shipper → YC Logging |
-| **kube-prometheus-stack** | Metrics + Grafana |
-| **Velero** | Cluster/namespace backup |
-| **NetworkPolicy + PDB** | Сегментация и availability |
-| **GitHub Actions** | Lint, build→YCR, Argo sync |
-
-</td>
-</tr>
-</table>
+| Слой | Компоненты |
+|------|------------|
+| **Cloud (YC)** | VPC, MK8s, Object Storage, YCR, Lockbox, Cloud Logging |
+| **Platform** | ESO, Fluent Bit, Prometheus, Grafana, Velero, NetworkPolicy, PDB |
+| **Delivery** | OpenTofu, Helm, Argo CD, GitHub Actions |
+| **App** | Paper server, world backup CronJob, watchdog |
 
 <details>
-<summary><strong>Опционально (при наличии домена)</strong></summary>
+<summary>Опционально</summary>
 
-- **Cloud DNS** — A-record `mc.example.com`
-- **Certificate Manager + ALB** — HTTPS для admin UI
-
-Включение: `enable_dns = true` в `terraform.tfvars` → `./scripts/setup-dns.sh`
+- **Cloud DNS** — `enable_dns = true` + `./scripts/setup-dns.sh`
+- **Remote Terraform state** — `./scripts/setup-tfstate.sh`
+- **Node autoscaling 1–2** — включён; модуль `mk8s` всегда использует `auto_scale` (без replace при смене min/max)
 
 </details>
 
 ---
 
-## 🏗 Архитектура
-
-### High-level
+## Architecture
 
 ```mermaid
-flowchart LR
-  subgraph Clients
-    P[Игроки]
-    A[API clients]
+flowchart TB
+  subgraph day2["Day-2: Git + CI"]
+    GH[GitHub]
+    GHA[GitHub Actions]
+    ARGO[Argo CD]
   end
 
-  subgraph GitHub
-    R[Repository]
-    CI[GitHub Actions]
-  end
-
-  subgraph YC["Yandex Cloud"]
+  subgraph yc["Yandex Cloud"]
     NLB[NLB :25565]
-    K8s[(MK8s)]
-    S3[(Object Storage)]
-    PG[(PostgreSQL)]
+    K8s[Managed Kubernetes]
+    S3[Object Storage]
     LB[Lockbox]
-    YCR[YCR]
+    YCR[Container Registry]
     LOG[Cloud Logging]
-    CF[Cloud Function]
-    GW[API Gateway]
   end
 
-  P -->|TCP| NLB --> K8s
-  A -->|HTTPS| GW --> CF
+  P[Игроки] -->|TCP| NLB --> K8s
   K8s --> S3
-  K8s --> PG
   K8s --> LOG
   LB -.->|ESO| K8s
   YCR --> K8s
-  R -->|Argo CD| K8s
-  CI -->|build + sync| K8s
+  GH --> ARGO --> K8s
+  GHA -->|build + sync| K8s
 ```
 
 ### CI/CD pipeline
 
 ```mermaid
 flowchart LR
-  PR[Pull Request] --> V[tofu validate<br/>helm lint]
+  PR[Pull Request] --> V[tofu validate + helm lint]
   M[Push main] --> V
   M --> B[Docker build]
   B --> P[Push YCR]
@@ -154,81 +120,77 @@ flowchart LR
   S --> K8s[(Cluster)]
 ```
 
-### Data flow: секреты и бэкапы
+### Operational model
 
-```mermaid
-sequenceDiagram
-  participant TF as OpenTofu
-  participant LB as Lockbox
-  participant ESO as External Secrets
-  participant Pod as Minecraft Pod
-  participant S3 as Object Storage
+| Фаза | Кто меняет | Что |
+|------|------------|-----|
+| **Day 0** | OpenTofu | VPC, MK8s, Lockbox, Storage, YCR, logging SA |
+| **Day 1** | Helm / scripts (bootstrap) | ESO, Fluent Bit, Prometheus, Velero, Argo CD |
+| **Day 2** | Git + Argo CD | Minecraft chart, platform apps, образ из CI |
 
-  TF->>LB: RCON + S3 keys
-  LB->>ESO: sync (1h)
-  ESO->>Pod: Secret minecraft-secrets
-  Pod->>Pod: RCON save-all
-  Pod->>S3: world-*.tar.gz (CronJob)
-```
+> После bootstrap **не** деплой Helm вручную — только через git и Argo CD sync.
 
 ---
 
-## 📁 Структура репозитория
+## Структура репозитория
 
 ```
 .
-├── terraform/
-│   ├── modules/              # vpc, mk8s, storage, lockbox, logging, dns,
-│   │                         # container-registry, velero, postgresql,
-│   │                         # cloud-function, api-gateway
-│   └── envs/dev/             # dev-окружение (tfvars — локально)
-├── helm/
-│   ├── minecraft/            # Chart: server, backup, watchdog, NetworkPolicy
-│   └── platform/             # Prometheus, Velero values
-├── argocd/applications/      # GitOps: app-of-apps
-├── k8s/platform/             # Fluent Bit, ESO manifests, CI RBAC
-├── docker/                   # Образ для YCR (FROM itzg/minecraft-server)
-├── scripts/                  # Deploy & setup automation
-├── config/                   # S3 lifecycle rules
-├── docs/                     # monitoring.md
-└── .github/workflows/        # CI/CD
+├── terraform/modules/       # vpc, mk8s, storage, lockbox, logging, dns, velero, container-registry
+├── terraform/envs/dev/      # окружение (tfvars — локально)
+├── helm/minecraft/          # server, backup, watchdog, NetworkPolicy, PDB
+├── helm/platform/           # Prometheus, Velero values
+├── argocd/applications/     # GitOps app-of-apps
+├── k8s/platform/            # Fluent Bit, ESO, CI RBAC
+├── docker/                  # образ для YCR
+├── scripts/                 # bootstrap и runbook
+└── .github/workflows/       # CI/CD
 ```
 
 ---
 
-## 📦 Требования
+## Требования
 
-| Инструмент | Версия | Установка |
-|------------|--------|-----------|
-| [yc CLI](https://yandex.cloud/ru/docs/cli/quickstart) | latest | `curl … \| bash` |
-| [OpenTofu](https://opentofu.org/) | ≥ 1.5 | `brew install opentofu` |
-| [kubectl](https://kubernetes.io/docs/tasks/tools/) | ≥ 1.28 | `brew install kubectl` |
-| [Helm](https://helm.sh/) | 3.x | `brew install helm` |
-| Docker | optional | локальный push в YCR |
+| Инструмент | Версия | Назначение |
+|------------|--------|------------|
+| [yc CLI](https://yandex.cloud/ru/docs/cli/quickstart) | latest | YC API, kubeconfig |
+| [OpenTofu](https://opentofu.org/) | ≥ 1.5 | IaC |
+| [kubectl](https://kubernetes.io/docs/tasks/tools/) | ≥ 1.28 | Kubernetes |
+| [Helm](https://helm.sh/) | 3.x | Bootstrap charts |
+| Docker | optional | Локальный push в YCR |
 
-Аккаунт Yandex Cloud с правами на создание MK8s, Object Storage, Lockbox.
+Права в каталоге YC: MK8s, Object Storage, Lockbox, Container Registry, Logging.
 
 ---
 
-## 🚀 Быстрый старт
+## Quick start
 
-### 1. Yandex Cloud
+### Day 0 — инфраструктура
 
 ```bash
 yc init
 yc config get folder-id
 yc managed-kubernetes list-versions
-```
 
-### 2. Конфигурация Terraform
-
-```bash
 cd terraform/envs/dev
 cp terraform.tfvars.example terraform.tfvars
-# Заполни: folder_id, k8s_version, backup_bucket_name (глобально уникальное имя)
+# folder_id, k8s_version, backup_bucket_name (глобально уникальное имя)
+
+export YC_TOKEN=$(yc iam create-token)
+tofu init && tofu apply
 ```
 
-### 3. Полный деплой
+### Day 1 — platform bootstrap
+
+```bash
+./scripts/deploy-platform.sh      # ESO + Lockbox sync + S3 lifecycle
+./scripts/deploy-minecraft.sh     # Helm chart + ожидание EXTERNAL-IP
+./scripts/deploy-velero.sh       # Velero + credentials
+kubectl apply -f argocd/applications/platform-root.yaml
+```
+
+<details>
+<summary>Альтернатива: deploy-v2.sh (всё в одном скрипте)</summary>
 
 ```bash
 ./scripts/deploy-v2.sh
@@ -236,90 +198,9 @@ cp terraform.tfvars.example terraform.tfvars
 kubectl apply -f argocd/applications/platform-root.yaml
 ```
 
-<details>
-<summary><strong>Пошаговый деплой</strong></summary>
-
-```bash
-./scripts/deploy-infra.sh       # VPC + MK8s + Lockbox + Storage + Registry + Logging
-./scripts/deploy-platform.sh    # ESO + Lockbox sync + lifecycle
-./scripts/deploy-minecraft.sh   # Helm chart + ожидание EXTERNAL-IP
-./scripts/deploy-velero.sh      # Velero + S3 credentials
-kubectl apply -f argocd/applications/platform-root.yaml
-```
-
 </details>
 
-### 4. Подключение к серверу
-
-```bash
-export MC_HOST=$(kubectl get svc minecraft -n minecraft -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
-echo "Connect: ${MC_HOST}:25565"
-```
-
----
-
-## 🌐 Endpoints
-
-| Сервис | URL / команда |
-|--------|---------------|
-| **Minecraft** | `kubectl get svc minecraft -n minecraft` → `EXTERNAL-IP:25565` |
-| **API Gateway** | `tofu output -raw api_gateway_domain` |
-| **Cloud Function** | `tofu output -raw cloud_function_url` |
-| **PostgreSQL** | `tofu output -raw postgresql_host` |
-| **Grafana** | `kubectl port-forward -n monitoring svc/kube-prometheus-grafana 3000:80` |
-| **Argo CD** | `kubectl port-forward -n argocd svc/argocd-server 8080:443` |
-| **Cloud Logging** | Консоль YC → Logging → `minecraft-k8s-logs` |
-
-Пример проверки status API:
-
-```bash
-curl -s "https://$(tofu -chdir=terraform/envs/dev output -raw api_gateway_domain)/"
-# {"service":"minecraft","host":"…","port":25565,"online":true}
-```
-
----
-
-## 🔄 GitOps
-
-Argo CD управляет всеми компонентами через **app-of-apps**:
-
-```
-argocd/applications/
-├── platform-root.yaml      # корневое Application
-├── minecraft.yaml          # Helm chart сервера
-├── external-secrets.yaml   # ESO operator
-├── kube-prometheus.yaml    # Prometheus + Grafana
-├── fluent-bit.yaml         # логи → Cloud Logging
-└── velero.yaml             # cluster backup
-```
-
-```bash
-kubectl apply -f argocd/applications/platform-root.yaml
-kubectl get applications -n argocd
-```
-
-> **Важно:** GitHub Actions не деплоит Helm напрямую — только собирает образ и триггерит Argo sync.
-
----
-
-## ⚙️ CI/CD
-
-Workflow [`.github/workflows/ci.yml`](.github/workflows/ci.yml):
-
-| Job | Триггер | Действие |
-|-----|---------|----------|
-| `validate` | PR + push | `tofu validate`, `helm lint` |
-| `build-image` | push `main` | Docker build → push YCR |
-| `sync-gitops` | push `main` | Argo CD sync всех Applications |
-
-### Секреты GitHub
-
-Settings → Secrets and variables → Actions:
-
-| Secret | Описание |
-|--------|----------|
-| `YC_FOLDER_ID` | ID каталога Yandex Cloud |
-| `YC_SA_JSON_CREDENTIALS` | JSON-ключ SA (долгоживущий, **не** IAM-токен) |
+### Day 2 — CI для GitHub
 
 ```bash
 ./scripts/setup-github-actions-sa.sh
@@ -328,47 +209,48 @@ gh secret set YC_FOLDER_ID -b "YOUR_FOLDER_ID" -R L3xu5/minecraft-yc-devops
 kubectl apply -f k8s/platform/github-actions-rbac.yaml
 ```
 
----
-
-## 💾 Бэкапы и DR
-
-| Уровень | Механизм | Расписание | Хранилище |
-|---------|----------|------------|-----------|
-| **World** | CronJob: RCON `save-all` → tar → S3 | каждые 6 ч | `world-*.tar.gz` |
-| **Cluster** | Velero namespace backup | 03:00 UTC | S3 prefix `velero/` |
-| **Lifecycle** | STANDARD → COLD (7d) → DELETE (30d) | ежедневно 00:00 UTC | `./scripts/setup-lifecycle.sh` |
+### Проверка после деплоя
 
 ```bash
-# Ручной бэкап мира
-kubectl create job --from=cronjob/minecraft-world-backup backup-manual -n minecraft
-kubectl logs -f job/backup-manual -n minecraft
-
-# Список архивов
-yc storage s3api list-objects-v2 --bucket minecraft-world-backup-b1gqbqg5
+kubectl get nodes                          # STATUS Ready
+kubectl get applications -n argocd         # Synced / Healthy
+kubectl get pods -n minecraft              # minecraft-* Running
+kubectl get svc minecraft -n minecraft     # EXTERNAL-IP:25565
+kubectl get externalsecret -n minecraft    # SecretSynced
 ```
 
 ---
 
-## 📊 Observability
+## Конфигурация Terraform
 
-| Компонент | Что даёт |
-|-----------|----------|
-| **Fluent Bit** | Логи pod'ов → Cloud Logging |
-| **Prometheus** | Метрики кластера и приложений |
-| **Grafana** | Дашборды (admin / `changeme-grafana`) |
-| **Watchdog CronJob** | Каждые 15 мин: pod Ready + failed backups |
+Файл: `terraform/envs/dev/terraform.tfvars` (не коммитится).
 
-Подробнее: [docs/monitoring.md](docs/monitoring.md)
+| Переменная | Default | Назначение |
+|------------|---------|------------|
+| `folder_id` | — | ID каталога YC |
+| `k8s_version` | — | Версия K8s (`yc managed-kubernetes list-versions`) |
+| `backup_bucket_name` | — | Глобально уникальное имя S3 bucket |
+| `enable_backups` | `true` | Object Storage + SA для бэкапов |
+| `enable_lockbox` | `true` | Lockbox + ESO SA |
+| `enable_container_registry` | `true` | YCR |
+| `enable_logging` | `true` | Log group + logging SA |
+| `enable_velero` | `true` | Velero SA + S3 keys |
+| `enable_dns` | `false` | Cloud DNS A-record |
+| `enable_node_autoscaling` | `true` | min/max нод (1–2) |
+| `node_preemptible` | `true` | Прерываемая worker VM (~70% дешевле; возможны простои) |
+| `node_memory_gb` | `64` | Worker (max 4 vCPU); Minecraft heap 58G |
+| `node_count` | `1` | Начальный размер node group |
 
----
+Outputs:
 
-## 🏔 Terraform
+```bash
+cd terraform/envs/dev
+tofu output -raw rcon_password       # sensitive
+tofu output -raw minecraft_image
+tofu output -raw backup_bucket_name
+```
 
-### Modules
-
-`vpc` · `mk8s` · `storage` · `lockbox` · `container-registry` · `logging` · `dns` · `velero` · `postgresql` · `cloud-function` · `api-gateway`
-
-### Remote state (рекомендуется)
+Remote state (рекомендуется):
 
 ```bash
 ./scripts/setup-tfstate.sh
@@ -376,112 +258,215 @@ cp terraform/envs/dev/backend.tf.example terraform/envs/dev/backend.tf
 cd terraform/envs/dev && tofu init -migrate-state
 ```
 
-### Полезные outputs
+---
+
+## Endpoints
+
+| Сервис | Доступ |
+|--------|--------|
+| **Minecraft** | `kubectl get svc minecraft -n minecraft` → `EXTERNAL-IP:25565` |
+| **Grafana** | `kubectl port-forward -n monitoring svc/kube-prometheus-grafana 3000:80` → `admin` / `changeme-grafana` |
+| **Argo CD** | `kubectl port-forward -n argocd svc/argocd-server 8080:443` |
+| **Cloud Logging** | Консоль YC → Logging → `minecraft-k8s-logs` |
+
+---
+
+## GitOps
+
+```
+argocd/applications/
+├── platform-root.yaml
+├── minecraft.yaml
+├── external-secrets.yaml
+├── kube-prometheus.yaml
+├── fluent-bit.yaml
+└── velero.yaml
+```
 
 ```bash
-cd terraform/envs/dev
-tofu output -raw rcon_password          # RCON (sensitive)
-tofu output -raw postgresql_host
-tofu output -raw api_gateway_domain
-tofu output -raw minecraft_image
+kubectl apply -f argocd/applications/platform-root.yaml
+kubectl get applications -n argocd
+```
+
+Изменения в `helm/` или `argocd/` → commit → push `main` → CI sync → Argo CD применяет.
+
+---
+
+## CI/CD
+
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml):
+
+| Job | Триггер | Действие |
+|-----|---------|----------|
+| `validate` | PR + push | `tofu validate`, `helm lint` |
+| `build-image` | push `main` | Docker build → push YCR |
+| `sync-gitops` | push `main` | Argo CD sync |
+
+Секреты GitHub: `YC_FOLDER_ID`, `YC_SA_JSON_CREDENTIALS` (JSON-ключ SA, **не** IAM-токен).
+
+---
+
+## Бэкапы и DR
+
+| Уровень | Механизм | Расписание |
+|---------|----------|------------|
+| **World** | CronJob: RCON `save-all` → tar → S3 | каждые 6 ч |
+| **Cluster** | Velero namespace backup | 03:00 UTC |
+| **Lifecycle** | STANDARD → COLD (7d) → DELETE (30d) | `./scripts/setup-lifecycle.sh` |
+
+```bash
+kubectl create job --from=cronjob/minecraft-world-backup backup-manual -n minecraft
+yc storage s3api list-objects-v2 --bucket YOUR_BUCKET
 ```
 
 ---
 
-## 🔧 Операции
+## Observability
 
-<details>
-<summary><strong>RCON-пароль</strong></summary>
+| Компонент | Назначение |
+|-----------|------------|
+| Fluent Bit | Логи pod'ов → Cloud Logging |
+| Prometheus | Метрики кластера |
+| Grafana | Дашборды |
+| Watchdog CronJob | Pod Ready + failed backups (каждые 15 мин) |
+
+Подробнее: [docs/monitoring.md](docs/monitoring.md)
+
+---
+
+## Best practices
+
+### Инфраструктура
+
+- **Не пересоздавай node group** без причины — каждая нода с `nat = true` запрашивает внешний IP.
+- **Не запускай `tofu apply` в цикле** при quota error — лимит `vpc.externalAddressesCreation.rate` ~60 мин ([квоты YC](https://yandex.cloud/ru/docs/concepts/quotas-limits)).
+- **Remote state** в S3 — не коммить `terraform.tfstate`.
+- **Targeted apply** для node group: `./scripts/recover-node-group.sh` (не полный apply при восстановлении).
+- **Bootstrap один раз**, дальше — git + Argo CD.
+
+### Операции
+
+- Бэкап мира перед обновлением chart или миграцией PVC.
+- Обновление образа: push `main` или `./scripts/build-push-image.sh` + Argo sync.
+- Grafana/Argo — `port-forward`, не LoadBalancer (квота NLB).
+
+### Чего избегать
+
+| Действие | Риск |
+|----------|------|
+| `tofu apply` каждые 5 мин при quota error | Retry VM, продление блокировки |
+| LoadBalancer на Grafana + Argo + Minecraft | Исчерпание квоты NLB |
+| Секреты в git / Helm values | Утечка RCON и S3 keys |
+| Helm upgrade вручную после bootstrap | Расхождение с GitOps |
+
+---
+
+## Security
+
+| Контроль | Реализация |
+|----------|------------|
+| Secrets | Lockbox → ESO; `terraform.tfvars` и state в `.gitignore` |
+| CI auth | SA JSON (`YC_SA_JSON_CREDENTIALS`), не IAM token |
+| Network | NetworkPolicy на Minecraft pod |
+| Availability | PDB `minAvailable: 1` |
+| RBAC | GitHub Actions SA — минимальные роли + отдельный ClusterRoleBinding |
+
+RCON-пароль:
 
 ```bash
 cd terraform/envs/dev && tofu output -raw rcon_password
 ```
 
-</details>
+---
 
-<details>
-<summary><strong>Обновление образа вручную</strong></summary>
+## Runbook
+
+### Восстановление node group (quota error)
+
+Симптом в audit log:
+
+```
+RESOURCE_EXHAUSTED: Quota limit vpc.externalAddressesCreation.rate exceeded
+```
+
+```bash
+# 1. Остановить retry
+yc managed-kubernetes node-group list
+yc managed-kubernetes node-group delete <NODE_GROUP_ID> --async
+
+# 2. Подождать >= 60 мин с последней ошибки
+
+# 3. Восстановить (интерактивно, один targeted apply)
+./scripts/recover-node-group.sh
+
+# 4. Проверить
+kubectl get nodes
+kubectl get pods -A
+```
+
+### Обновление образа
 
 ```bash
 ./scripts/build-push-image.sh
-# Argo CD подхватит values-prod.yaml или сделай sync:
 kubectl annotate application minecraft -n argocd argocd.argoproj.io/refresh=hard --overwrite
 ```
 
-</details>
-
-<details>
-<summary><strong>DNS (если есть домен)</strong></summary>
-
-```bash
-./scripts/setup-dns.sh mydomain.ru.
-# NS у регистратора → mc.mydomain.ru:25565
-```
-
-</details>
-
-<details>
-<summary><strong>Таблица скриптов</strong></summary>
+### Скрипты
 
 | Скрипт | Назначение |
 |--------|------------|
-| `deploy-v2.sh` | Полный production deploy |
+| `deploy-v2.sh` | Полный bootstrap (Terraform + platform + Helm) |
 | `deploy-infra.sh` | Только Terraform + kubeconfig |
 | `deploy-platform.sh` | ESO, Lockbox, lifecycle |
 | `deploy-minecraft.sh` | Helm + EXTERNAL-IP |
 | `deploy-velero.sh` | Velero + credentials |
-| `setup-github-actions-sa.sh` | SA и ключ для CI |
-| `setup-lifecycle.sh` | S3 lifecycle policy |
-| `setup-tfstate.sh` | Bucket для remote state |
+| `recover-node-group.sh` | Восстановление после quota error |
+| `setup-github-actions-sa.sh` | SA для CI |
+| `setup-lifecycle.sh` | S3 lifecycle |
+| `setup-tfstate.sh` | Remote state bucket |
 | `setup-dns.sh` | Cloud DNS |
 | `build-push-image.sh` | Локальный push в YCR |
 
-</details>
-
 ---
 
-## 🔒 Безопасность
-
-- Секреты только в **Lockbox** → ESO; `terraform.tfvars` и `*.tfstate` в `.gitignore`
-- CI auth через **SA JSON** (`YC_SA_JSON_CREDENTIALS`), не short-lived IAM token
-- **NetworkPolicy** ограничивает ingress/egress Minecraft pod
-- **PodDisruptionBudget** `minAvailable: 1` для единственного pod
-- GitHub Actions SA: минимальные роли + `ClusterRoleBinding` только для deploy
-
----
-
-## 🩺 Troubleshooting
+## Troubleshooting
 
 | Симптом | Решение |
 |---------|---------|
-| `Invalid session` в клиенте | Сервер в offline mode; проверь `minecraft.onlineMode: false` |
-| EXTERNAL-IP `<pending>` | Квота NLB — освободи LoadBalancer или увеличь `ylb.networkLoadBalancers.count` |
-| ESO webhook timeout | `./scripts/deploy-platform.sh` (`failurePolicy=Ignore`) |
+| `externalAddressesCreation.rate exceeded` | [Runbook](#восстановление-node-group-quota-error). **Не** повторять apply |
+| Много `Create instance` ошибок в audit log | Удали PROVISIONING node group → жди 60 мин → `recover-node-group.sh` |
+| `kubectl get nodes` пуст | Node group не поднялась — runbook выше |
+| Сервер offline, нода `NotReady` | Preemptible VM остановлена YC — подожди автозапуск (минуты) |
+| EXTERNAL-IP `<pending>` | Квота NLB — освободи LB или увеличь `ylb.networkLoadBalancers.count` |
+| `Invalid session` в клиенте | Offline mode: `minecraft.onlineMode: false` |
+| ESO webhook timeout | `./scripts/deploy-platform.sh` |
 | ExternalSecret не sync | `kubectl delete secret minecraft-secrets -n minecraft` |
-| Backup `InvalidBucketName` | `./scripts/deploy-platform.sh` |
 | CI `secrets is forbidden` | `kubectl apply -f k8s/platform/github-actions-rbac.yaml` |
-| API Gateway `online: false` | Pod перезапускается; подожди 1–2 мин |
-| Grafana/Argo без внешнего IP | Квота NLB → port-forward (см. [Endpoints](#-endpoints)) |
+| Grafana/Argo без внешнего IP | `kubectl port-forward` — см. [Endpoints](#endpoints) |
 
 ---
 
-## 💰 Стоимость и cleanup
+## Стоимость и cleanup
 
-**Ориентир:** ~7 000–12 000 ₽/мес (MK8s + NLB + PostgreSQL + Storage + Lockbox + serverless).
+| Компонент | ~₽/мес (24/7) |
+|-----------|---------------|
+| MK8s master | ~7 000 |
+| Worker 4 vCPU / 64 GB (preemptible) | ~8 200 |
+| NLB (Minecraft) | ~900 |
+| Storage + Lockbox + Logging | ~1 500–2 000 |
+| **Итого** | **~17 600–18 100** |
+
+Minecraft: **58G** heap, pod **60Gi**. Worker без public IP — egress через NAT-шлюз.
 
 ```bash
 cd terraform/envs/dev && tofu destroy
-yc storage bucket delete --name minecraft-world-backup-b1gqbqg5
-yc storage bucket delete --name minecraft-tfstate-b1gqbqg5  # если создавали
+yc storage bucket delete --name YOUR_BUCKET
 ```
 
 ---
 
 <div align="center">
 
-**Minecraft** — торговая марка Mojang / Microsoft.  
-Проект создан в учебных целях.
-
-[⬆ Наверх](#minecraft-on-yandex-cloud-kubernetes)
+**Minecraft** — торговая марка Mojang / Microsoft. Проект создан в учебных целях.
 
 </div>

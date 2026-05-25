@@ -5,6 +5,9 @@ initContainers:
       - mountPath: /target
         name: plugins
 
+# Argo CD: upgrade job ломается на bitnami/kubectl и даёт OutOfSync CRD
+upgradeCRDs: false
+
 snapshotsEnabled: false
 
 configuration:

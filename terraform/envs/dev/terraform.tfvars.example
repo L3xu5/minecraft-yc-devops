@@ -5,7 +5,7 @@ zone        = "ru-central1-a"
 k8s_version = "1.32"
 
 node_count     = 1
-node_memory_gb = 8
+node_memory_gb = 62
 cluster_name   = "minecraft-k8s"
 
 enable_backups            = true
@@ -13,18 +13,15 @@ enable_lockbox            = true
 enable_container_registry = true
 enable_logging            = true
 enable_dns                = false
-
-enable_node_autoscaling   = true
 enable_velero             = true
-enable_postgresql         = true
-enable_cloud_function     = true
-enable_api_gateway        = true
-
-minecraft_external_ip     = ""  # kubectl get svc minecraft -n minecraft
+enable_node_autoscaling   = true
+node_count_min            = 1
+node_count_max            = 2
+node_preemptible          = true
 
 backup_bucket_name = "minecraft-world-backup-YOUR-FOLDER-SUFFIX"
 
 # DNS (optional):
 # enable_dns            = true
 # dns_zone              = "example.com."
-# minecraft_external_ip = "1.2.3.4"
+# minecraft_external_ip = "YOUR_LB_IP"

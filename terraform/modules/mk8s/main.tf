@@ -51,23 +51,11 @@ resource "yandex_kubernetes_node_group" "main" {
   cluster_id  = yandex_kubernetes_cluster.main.id
   version     = var.k8s_version
 
-  dynamic "scale_policy" {
-    for_each = var.enable_autoscaling ? [1] : []
-    content {
-      auto_scale {
-        min     = var.node_count_min
-        max     = var.node_count_max
-        initial = var.node_count
-      }
-    }
-  }
-
-  dynamic "scale_policy" {
-    for_each = var.enable_autoscaling ? [] : [1]
-    content {
-      fixed_scale {
-        size = var.node_count
-      }
+  scale_policy {
+    auto_scale {
+      min     = var.enable_autoscaling ? var.node_count_min : var.node_count
+      max     = var.enable_autoscaling ? var.node_count_max : var.node_count
+      initial = var.node_count
     }
   }
 
@@ -77,11 +65,16 @@ resource "yandex_kubernetes_node_group" "main" {
     }
   }
 
+  deploy_policy {
+    max_expansion   = 1
+    max_unavailable = 0
+  }
+
   instance_template {
     platform_id = "standard-v3"
 
     network_interface {
-      nat                = true
+      nat                = false
       subnet_ids         = [var.subnet_id]
       security_group_ids = [var.main_security_group_id, var.public_security_group_id]
     }
@@ -98,6 +91,10 @@ resource "yandex_kubernetes_node_group" "main" {
 
     metadata = {
       enable-oslogin = "true"
+    }
+
+    scheduling_policy {
+      preemptible = var.node_preemptible
     }
   }
 }

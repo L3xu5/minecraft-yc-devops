@@ -3,11 +3,28 @@ resource "yandex_vpc_network" "main" {
   description = "VPC for Minecraft Kubernetes cluster"
 }
 
+resource "yandex_vpc_gateway" "egress" {
+  name = "${var.network_name}-egress-gateway"
+
+  shared_egress_gateway {}
+}
+
+resource "yandex_vpc_route_table" "egress" {
+  name       = "${var.network_name}-egress-rt"
+  network_id = yandex_vpc_network.main.id
+
+  static_route {
+    destination_prefix = "0.0.0.0/0"
+    gateway_id         = yandex_vpc_gateway.egress.id
+  }
+}
+
 resource "yandex_vpc_subnet" "main" {
   name           = var.subnet_name
   zone           = var.zone
   network_id     = yandex_vpc_network.main.id
   v4_cidr_blocks = [var.subnet_cidr]
+  route_table_id = yandex_vpc_route_table.egress.id
   description    = "Subnet in ${var.zone}"
 }
 
