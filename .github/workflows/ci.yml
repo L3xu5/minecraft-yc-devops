@@ -100,8 +100,9 @@ jobs:
         env:
           ARGOCD_NAMESPACE: argocd
         run: |
+          kubectl config set-context --current --namespace=argocd
           kubectl apply -f argocd/applications/platform-root.yaml
           for app in minecraft external-secrets kube-prometheus fluent-bit velero; do
-            argocd app sync "$app" --core --argocd-namespace argocd --prune || true
+            argocd app sync "$app" --core --app-namespace argocd --prune || true
           done
-          argocd app wait minecraft --core --argocd-namespace argocd --health --timeout 600
+          argocd app wait minecraft --core --app-namespace argocd --health --timeout 600
