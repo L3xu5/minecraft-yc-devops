@@ -42,11 +42,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup OpenTofu
-        uses: opentofu/setup-opentofu@v1
-        with:
-          tofu_version: 1.12.0
-
       - name: Setup Helm
         uses: azure/setup-helm@v4
 
@@ -58,28 +53,28 @@ jobs:
           curl -sSL https://storage.yandexcloud.net/yandexcloud-yc/install.sh | bash -s -- -i "$HOME/yandex-cloud" -n
           echo "$HOME/yandex-cloud/bin" >> $GITHUB_PATH
 
-      - name: Configure Yandex Cloud
+      - name: Authenticate to Yandex Cloud (service account JSON)
         env:
           YC_SA_JSON_CREDENTIALS: ${{ secrets.YC_SA_JSON_CREDENTIALS }}
-          YC_TOKEN: ${{ secrets.YC_TOKEN }}
           YC_FOLDER_ID: ${{ secrets.YC_FOLDER_ID }}
         run: |
-          if [[ -n "${YC_SA_JSON_CREDENTIALS}" ]]; then
-            echo "${YC_SA_JSON_CREDENTIALS}" > sa-key.json
-            yc config set service-account-key sa-key.json
-            rm -f sa-key.json
-          elif [[ -n "${YC_TOKEN}" ]]; then
-            export YC_TOKEN
-            yc config set token "${YC_TOKEN}"
-          else
-            echo "Set YC_SA_JSON_CREDENTIALS or YC_TOKEN in repository secrets"
+          if [[ -z "${YC_SA_JSON_CREDENTIALS}" ]]; then
+            echo "Missing secret YC_SA_JSON_CREDENTIALS"
+            echo "Run: ./scripts/setup-github-actions-sa.sh"
             exit 1
           fi
+          if [[ -z "${YC_FOLDER_ID}" ]]; then
+            echo "Missing secret YC_FOLDER_ID"
+            exit 1
+          fi
+          install -m 600 /dev/null sa-key.json
+          printf '%s' "${YC_SA_JSON_CREDENTIALS}" > sa-key.json
+          yc config set service-account-key sa-key.json
           yc config set folder-id "${YC_FOLDER_ID}"
+          rm -f sa-key.json
 
       - name: Deploy Minecraft Helm chart
         env:
-          YC_FOLDER_ID: ${{ secrets.YC_FOLDER_ID }}
           BACKUP_BUCKET: minecraft-world-backup-b1gqbqg5
         run: |
           yc managed-kubernetes cluster get-credentials --name minecraft-k8s --external --force

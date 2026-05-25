@@ -114,9 +114,23 @@ cd terraform/envs/dev && tofu output -raw rcon_password
 ```
 
 **GitHub Actions** (`.github/workflows/ci.yml`):
-- `tofu validate` на каждый PR
-- `kubectl kustomize` валидация манифестов
-- Deploy закомментирован — добавь секреты `YC_TOKEN`, `YC_FOLDER_ID`
+- `tofu validate` + `helm lint` на каждый PR
+- Deploy Helm chart на push в `main`
+
+**Секреты репозитория** (Settings → Secrets → Actions):
+
+| Секрет | Значение |
+|--------|----------|
+| `YC_FOLDER_ID` | ID каталога YC, напр. `b1gqbqg5o03ev89s9m01` |
+| `YC_SA_JSON_CREDENTIALS` | JSON-ключ service account (не IAM-токен, не протухает) |
+
+Создание SA и ключа:
+```bash
+./scripts/setup-github-actions-sa.sh
+gh secret set YC_SA_JSON_CREDENTIALS < /path/to/key.json -R L3xu5/minecraft-yc-devops
+gh secret set YC_FOLDER_ID -b "b1gqbqg5o03ev89s9m01" -R L3xu5/minecraft-yc-devops
+kubectl apply -f k8s/platform/github-actions-rbac.yaml
+```
 
 ---
 
