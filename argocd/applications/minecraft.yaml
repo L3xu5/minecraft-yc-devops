@@ -11,7 +11,7 @@ spec:
     path: helm/minecraft
     helm:
       valueFiles:
-        - values.yaml
+        - values-prod.yaml
       parameters:
         - name: backup.bucketName
           value: minecraft-world-backup-b1gqbqg5

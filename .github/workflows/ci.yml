@@ -52,8 +52,8 @@ jobs:
 
       - name: Install yc CLI
         run: |
-          curl -sSL https://storage.yandexcloud.net/yandexcloud-yc/install.sh | bash -s -- -i /usr/local/yandex-cloud -n
-          echo "/usr/local/yandex-cloud/bin" >> $GITHUB_PATH
+          curl -sSL https://storage.yandexcloud.net/yandexcloud-yc/install.sh | bash -s -- -i "$HOME/yandex-cloud" -n
+          echo "$HOME/yandex-cloud/bin" >> $GITHUB_PATH
 
       - name: Configure Yandex Cloud
         env:
@@ -62,27 +62,17 @@ jobs:
         run: |
           yc config set folder-id "${YC_FOLDER_ID}"
 
-      - name: Terraform apply
-        if: env.YC_TOKEN != ''
-        env:
-          YC_TOKEN: ${{ secrets.YC_TOKEN }}
-        working-directory: ${{ env.TF_DIR }}
-        run: |
-          tofu init
-          tofu apply -auto-approve
-
       - name: Deploy Minecraft Helm chart
-        if: env.YC_TOKEN != ''
         env:
           YC_TOKEN: ${{ secrets.YC_TOKEN }}
+          YC_FOLDER_ID: ${{ secrets.YC_FOLDER_ID }}
+          BACKUP_BUCKET: minecraft-world-backup-b1gqbqg5
         run: |
           yc managed-kubernetes cluster get-credentials --name minecraft-k8s --external --force
-          BUCKET=$(tofu -chdir=${{ env.TF_DIR }} output -raw backup_bucket_name)
-          REGISTRY=$(tofu -chdir=${{ env.TF_DIR }} output -raw container_registry_id)
           helm upgrade --install minecraft ${{ env.HELM_CHART }} \
             -n minecraft --create-namespace \
             -f ${{ env.HELM_CHART }}/values-prod.yaml \
-            --set backup.bucketName="${BUCKET}" \
-            --set image.repository="cr.yandex/${REGISTRY}/minecraft-server" \
-            --set image.tag=latest \
+            --set backup.bucketName="${BACKUP_BUCKET}" \
+            --set persistence.existingClaim=minecraft-data \
             --wait --timeout 10m
+          kubectl get svc minecraft -n minecraft
