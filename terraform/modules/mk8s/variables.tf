@@ -55,6 +55,21 @@ variable "node_count" {
   default = 1
 }
 
+variable "enable_autoscaling" {
+  type    = bool
+  default = false
+}
+
+variable "node_count_min" {
+  type    = number
+  default = 1
+}
+
+variable "node_count_max" {
+  type    = number
+  default = 2
+}
+
 variable "node_cores" {
   type    = number
   default = 4

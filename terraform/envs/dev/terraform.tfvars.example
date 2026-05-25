@@ -1,4 +1,3 @@
-# Скопируй в terraform.tfvars и заполни значения:
 # cp terraform.tfvars.example terraform.tfvars
 
 folder_id   = "b1gxxxxxxxxxx"
@@ -12,6 +11,20 @@ cluster_name   = "minecraft-k8s"
 enable_backups            = true
 enable_lockbox            = true
 enable_container_registry = true
+enable_logging            = true
 enable_dns                = false
 
+enable_node_autoscaling   = true
+enable_velero             = true
+enable_postgresql         = true
+enable_cloud_function     = true
+enable_api_gateway        = true
+
+minecraft_external_ip     = ""  # kubectl get svc minecraft -n minecraft
+
 backup_bucket_name = "minecraft-world-backup-YOUR-FOLDER-SUFFIX"
+
+# DNS (optional):
+# enable_dns            = true
+# dns_zone              = "example.com."
+# minecraft_external_ip = "1.2.3.4"

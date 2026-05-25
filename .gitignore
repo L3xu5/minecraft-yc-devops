@@ -13,6 +13,7 @@ k8s/apps/minecraft/secret.yaml
 *.pem
 *.key
 yc-key.json
+**/function.zip
 
 # OS
 .DS_Store

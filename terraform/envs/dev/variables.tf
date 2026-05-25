@@ -84,3 +84,44 @@ variable "minecraft_external_ip" {
   default     = ""
   description = "LoadBalancer IP for DNS A-record (kubectl get svc -n minecraft)"
 }
+
+variable "enable_node_autoscaling" {
+  type    = bool
+  default = true
+}
+
+variable "node_count_min" {
+  type    = number
+  default = 1
+}
+
+variable "node_count_max" {
+  type    = number
+  default = 2
+}
+
+variable "enable_velero" {
+  type    = bool
+  default = true
+}
+
+variable "enable_postgresql" {
+  type    = bool
+  default = true
+}
+
+variable "enable_cloud_function" {
+  type    = bool
+  default = true
+}
+
+variable "enable_api_gateway" {
+  type    = bool
+  default = true
+}
+
+variable "tfstate_bucket_name" {
+  type        = string
+  default     = ""
+  description = "Optional S3 bucket for Terraform remote state (create via scripts/setup-tfstate.sh)"
+}

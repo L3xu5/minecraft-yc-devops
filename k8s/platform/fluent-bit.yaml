@@ -66,7 +66,7 @@ data:
     [OUTPUT]
         Name            yc-logging
         Match           kube.*
-        group_id        __LOG_GROUP_ID__
+        group_id        e23irc4k4tasblcsj71a
         resource_type   {kubernetes/namespace_name}
         resource_id     {kubernetes/pod_name}
         stream_name     {kubernetes/host}

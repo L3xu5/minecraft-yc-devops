@@ -51,9 +51,23 @@ resource "yandex_kubernetes_node_group" "main" {
   cluster_id  = yandex_kubernetes_cluster.main.id
   version     = var.k8s_version
 
-  scale_policy {
-    fixed_scale {
-      size = var.node_count
+  dynamic "scale_policy" {
+    for_each = var.enable_autoscaling ? [1] : []
+    content {
+      auto_scale {
+        min     = var.node_count_min
+        max     = var.node_count_max
+        initial = var.node_count
+      }
+    }
+  }
+
+  dynamic "scale_policy" {
+    for_each = var.enable_autoscaling ? [] : [1]
+    content {
+      fixed_scale {
+        size = var.node_count
+      }
     }
   }
 

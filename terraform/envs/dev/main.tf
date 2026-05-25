@@ -3,8 +3,15 @@ resource "random_password" "rcon" {
   special = false
 }
 
+resource "random_password" "postgres" {
+  length  = 24
+  special = false
+}
+
 locals {
-  rcon_password = coalesce(var.rcon_password, random_password.rcon.result)
+  rcon_password     = coalesce(var.rcon_password, random_password.rcon.result)
+  postgres_password = random_password.postgres.result
+  minecraft_host    = coalesce(var.minecraft_external_ip, "81.26.186.86")
 }
 
 module "vpc" {
@@ -28,6 +35,9 @@ module "mk8s" {
   public_security_group_id = module.vpc.public_security_group_id
   node_count               = var.node_count
   node_memory_gb           = var.node_memory_gb
+  enable_autoscaling       = var.enable_node_autoscaling
+  node_count_min           = var.node_count_min
+  node_count_max           = var.node_count_max
 }
 
 module "storage" {
@@ -67,4 +77,38 @@ module "dns" {
   zone_name    = var.dns_zone
   record_name  = var.dns_record_name
   minecraft_ip = var.minecraft_external_ip
+}
+
+module "velero" {
+  count  = var.enable_velero ? 1 : 0
+  source = "../../modules/velero"
+
+  folder_id = var.folder_id
+}
+
+module "postgresql" {
+  count  = var.enable_postgresql ? 1 : 0
+  source = "../../modules/postgresql"
+
+  network_id         = module.vpc.network_id
+  subnet_id          = module.vpc.subnet_id
+  zone               = var.zone
+  security_group_ids = [module.vpc.main_security_group_id]
+  database_password  = local.postgres_password
+}
+
+module "cloud_function" {
+  count  = var.enable_cloud_function ? 1 : 0
+  source = "../../modules/cloud-function"
+
+  folder_id      = var.folder_id
+  minecraft_host = local.minecraft_host
+}
+
+module "api_gateway" {
+  count  = var.enable_api_gateway && var.enable_cloud_function ? 1 : 0
+  source = "../../modules/api-gateway"
+
+  function_id        = module.cloud_function[0].function_id
+  service_account_id = module.cloud_function[0].service_account_id
 }

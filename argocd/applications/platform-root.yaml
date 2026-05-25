@@ -1,0 +1,23 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: platform-root
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/L3xu5/minecraft-yc-devops.git
+    targetRevision: main
+    path: argocd/applications
+    directory:
+      recurse: false
+      include: '{minecraft,external-secrets,kube-prometheus,fluent-bit,velero}.yaml'
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

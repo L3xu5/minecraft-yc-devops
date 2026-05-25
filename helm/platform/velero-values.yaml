@@ -1,0 +1,38 @@
+initContainers:
+  - name: velero-plugin-for-aws
+    image: velero/velero-plugin-for-aws:v1.10.0
+    volumeMounts:
+      - mountPath: /target
+        name: plugins
+
+snapshotsEnabled: false
+
+configuration:
+  backupStorageLocation:
+    - name: default
+      provider: aws
+      bucket: minecraft-world-backup-b1gqbqg5
+      prefix: velero
+      default: true
+      config:
+        region: ru-central1
+        s3ForcePathStyle: "true"
+        s3Url: https://storage.yandexcloud.net
+  volumeSnapshotLocation: []
+
+credentials:
+  useSecret: true
+  existingSecret: velero-credentials
+
+deployNodeAgent: true
+
+schedules:
+  cluster-backup:
+    disabled: false
+    schedule: "0 3 * * *"
+    template:
+      ttl: 168h
+      includedNamespaces:
+        - minecraft
+        - platform
+        - monitoring

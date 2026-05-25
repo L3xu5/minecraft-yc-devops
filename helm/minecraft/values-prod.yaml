@@ -1,7 +1,6 @@
-# Production values — image from Yandex Container Registry
-# Заполняется deploy-v2.sh: --set image.repository=cr.yandex/...
-
 image:
+  repository: cr.yandex/crpb50888jld38d5pg5r/minecraft-server
+  tag: latest
   pullPolicy: Always
 
 persistence:
@@ -17,4 +16,10 @@ backup:
   bucketName: minecraft-world-backup-b1gqbqg5
 
 watchdog:
+  enabled: true
+
+networkPolicy:
+  enabled: true
+
+podDisruptionBudget:
   enabled: true

@@ -48,6 +48,33 @@ output "eso_service_account_id" {
   value = var.enable_lockbox ? module.lockbox[0].eso_service_account_id : null
 }
 
+output "velero_access_key" {
+  value     = var.enable_velero ? module.velero[0].access_key : null
+  sensitive = true
+}
+
+output "velero_secret_key" {
+  value     = var.enable_velero ? module.velero[0].secret_key : null
+  sensitive = true
+}
+
+output "postgresql_host" {
+  value = var.enable_postgresql ? module.postgresql[0].host_fqdn : null
+}
+
+output "postgresql_password" {
+  value     = var.enable_postgresql ? local.postgres_password : null
+  sensitive = true
+}
+
+output "api_gateway_domain" {
+  value = var.enable_api_gateway && var.enable_cloud_function ? module.api_gateway[0].gateway_domain : null
+}
+
+output "cloud_function_url" {
+  value = var.enable_cloud_function ? module.cloud_function[0].function_url : null
+}
+
 output "next_steps" {
   value = <<-EOT
     Platform:

@@ -74,8 +74,6 @@ kubectl get externalsecret -n minecraft
 kubectl get secret minecraft-secrets -n minecraft 2>/dev/null || echo "ExternalSecret still syncing — check: kubectl describe externalsecret minecraft-secrets -n minecraft"
 
 echo ""
-echo "==> Deploy backup CronJob (if minecraft app is deployed):"
-echo "  kubectl apply -k ${ROOT}/k8s/apps/minecraft/"
-
-echo "==> Storage lifecycle (STANDARD → COLD → delete 30d)..."
+echo "==> Next: ./scripts/deploy-minecraft.sh or Argo CD sync"
+echo "==> Storage lifecycle..."
 "${ROOT}/scripts/setup-lifecycle.sh" "${BUCKET:-}"

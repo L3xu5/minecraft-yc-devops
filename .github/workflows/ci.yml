@@ -8,6 +8,8 @@ on:
 env:
   TF_DIR: terraform/envs/dev
   HELM_CHART: helm/minecraft
+  REGISTRY_ID: crpb50888jld38d5pg5r
+  IMAGE: cr.yandex/crpb50888jld38d5pg5r/minecraft-server:latest
 
 jobs:
   validate:
@@ -33,17 +35,41 @@ jobs:
         run: |
           helm lint ${{ env.HELM_CHART }}
           helm template minecraft ${{ env.HELM_CHART }} -f ${{ env.HELM_CHART }}/values-prod.yaml > /tmp/minecraft.yaml
-          kubectl apply --dry-run=client -f /tmp/minecraft.yaml 2>/dev/null || true
 
-  deploy:
+  build-image:
     needs: validate
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Helm
-        uses: azure/setup-helm@v4
+      - name: Install yc CLI
+        run: |
+          curl -sSL https://storage.yandexcloud.net/yandexcloud-yc/install.sh | bash -s -- -i "$HOME/yandex-cloud" -n
+          echo "$HOME/yandex-cloud/bin" >> $GITHUB_PATH
+
+      - name: Authenticate to Yandex Cloud
+        env:
+          YC_SA_JSON_CREDENTIALS: ${{ secrets.YC_SA_JSON_CREDENTIALS }}
+          YC_FOLDER_ID: ${{ secrets.YC_FOLDER_ID }}
+        run: |
+          printf '%s' "${YC_SA_JSON_CREDENTIALS}" > sa-key.json
+          yc config set service-account-key sa-key.json
+          yc config set folder-id "${YC_FOLDER_ID}"
+          rm -f sa-key.json
+
+      - name: Build and push image to YCR
+        run: |
+          yc container registry configure-docker
+          docker build -t "${{ env.IMAGE }}" docker/
+          docker push "${{ env.IMAGE }}"
+
+  sync-gitops:
+    needs: build-image
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
       - name: Setup kubectl
         uses: azure/setup-kubectl@v4
@@ -53,35 +79,27 @@ jobs:
           curl -sSL https://storage.yandexcloud.net/yandexcloud-yc/install.sh | bash -s -- -i "$HOME/yandex-cloud" -n
           echo "$HOME/yandex-cloud/bin" >> $GITHUB_PATH
 
-      - name: Authenticate to Yandex Cloud (service account JSON)
+      - name: Install Argo CD CLI
+        run: |
+          curl -sSL -o argocd https://github.com/argoproj/argo-cd/releases/download/v3.4.2/argocd-linux-amd64
+          chmod +x argocd
+          sudo mv argocd /usr/local/bin/
+
+      - name: Authenticate to Yandex Cloud
         env:
           YC_SA_JSON_CREDENTIALS: ${{ secrets.YC_SA_JSON_CREDENTIALS }}
           YC_FOLDER_ID: ${{ secrets.YC_FOLDER_ID }}
         run: |
-          if [[ -z "${YC_SA_JSON_CREDENTIALS}" ]]; then
-            echo "Missing secret YC_SA_JSON_CREDENTIALS"
-            echo "Run: ./scripts/setup-github-actions-sa.sh"
-            exit 1
-          fi
-          if [[ -z "${YC_FOLDER_ID}" ]]; then
-            echo "Missing secret YC_FOLDER_ID"
-            exit 1
-          fi
-          install -m 600 /dev/null sa-key.json
           printf '%s' "${YC_SA_JSON_CREDENTIALS}" > sa-key.json
           yc config set service-account-key sa-key.json
           yc config set folder-id "${YC_FOLDER_ID}"
           rm -f sa-key.json
-
-      - name: Deploy Minecraft Helm chart
-        env:
-          BACKUP_BUCKET: minecraft-world-backup-b1gqbqg5
-        run: |
           yc managed-kubernetes cluster get-credentials --name minecraft-k8s --external --force
-          helm upgrade --install minecraft ${{ env.HELM_CHART }} \
-            -n minecraft --create-namespace \
-            -f ${{ env.HELM_CHART }}/values-prod.yaml \
-            --set backup.bucketName="${BACKUP_BUCKET}" \
-            --set persistence.existingClaim=minecraft-data \
-            --wait --timeout 10m
-          kubectl get svc minecraft -n minecraft
+
+      - name: Sync Argo CD applications
+        run: |
+          kubectl apply -f argocd/applications/platform-root.yaml
+          for app in minecraft external-secrets kube-prometheus fluent-bit velero; do
+            argocd app sync "$app" --core --prune || true
+          done
+          argocd app wait minecraft --core --health --timeout 600
