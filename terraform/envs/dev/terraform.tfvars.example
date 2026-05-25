@@ -5,7 +5,7 @@ zone        = "ru-central1-a"
 k8s_version = "1.32"
 
 node_count     = 1
-node_memory_gb = 62
+node_memory_gb = 64
 cluster_name   = "minecraft-k8s"
 
 enable_backups            = true
