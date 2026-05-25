@@ -60,15 +60,25 @@ jobs:
 
       - name: Configure Yandex Cloud
         env:
+          YC_SA_JSON_CREDENTIALS: ${{ secrets.YC_SA_JSON_CREDENTIALS }}
           YC_TOKEN: ${{ secrets.YC_TOKEN }}
           YC_FOLDER_ID: ${{ secrets.YC_FOLDER_ID }}
         run: |
-          yc config set token "${YC_TOKEN}"
+          if [[ -n "${YC_SA_JSON_CREDENTIALS}" ]]; then
+            echo "${YC_SA_JSON_CREDENTIALS}" > sa-key.json
+            yc config set service-account-key sa-key.json
+            rm -f sa-key.json
+          elif [[ -n "${YC_TOKEN}" ]]; then
+            export YC_TOKEN
+            yc config set token "${YC_TOKEN}"
+          else
+            echo "Set YC_SA_JSON_CREDENTIALS or YC_TOKEN in repository secrets"
+            exit 1
+          fi
           yc config set folder-id "${YC_FOLDER_ID}"
 
       - name: Deploy Minecraft Helm chart
         env:
-          YC_TOKEN: ${{ secrets.YC_TOKEN }}
           YC_FOLDER_ID: ${{ secrets.YC_FOLDER_ID }}
           BACKUP_BUCKET: minecraft-world-backup-b1gqbqg5
         run: |
