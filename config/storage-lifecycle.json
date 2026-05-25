@@ -1,0 +1,20 @@
+{
+  "lifecycleRules": [
+    {
+      "id": "minecraft-backups-to-cold",
+      "enabled": true,
+      "filter": {
+        "prefix": "world-"
+      },
+      "transitions": [
+        {
+          "days": "7",
+          "storage_class": "COLD"
+        }
+      ],
+      "expiration": {
+        "days": "30"
+      }
+    }
+  ]
+}

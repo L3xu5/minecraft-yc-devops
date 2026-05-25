@@ -1,0 +1,112 @@
+{{- if .Values.backup.enabled }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: minecraft-backup
+  labels:
+    {{- include "minecraft.labels" . | nindent 4 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: minecraft-backup
+  labels:
+    {{- include "minecraft.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: minecraft-backup
+  labels:
+    {{- include "minecraft.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: minecraft-backup
+subjects:
+  - kind: ServiceAccount
+    name: minecraft-backup
+---
+{{- if .Values.backup.bucketName }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: minecraft-backup-config
+  labels:
+    {{- include "minecraft.labels" . | nindent 4 }}
+data:
+  bucket-name: {{ .Values.backup.bucketName | quote }}
+{{- end }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: minecraft-world-backup
+  labels:
+    {{- include "minecraft.labels" . | nindent 4 }}
+spec:
+  schedule: {{ .Values.backup.schedule | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          serviceAccountName: minecraft-backup
+          restartPolicy: OnFailure
+          containers:
+            - name: backup
+              image: amazon/aws-cli:2.15.30
+              env:
+                - name: AWS_ACCESS_KEY_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ .Values.secrets.name }}
+                      key: s3-access-key
+                - name: AWS_SECRET_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ .Values.secrets.name }}
+                      key: s3-secret-key
+                - name: AWS_DEFAULT_REGION
+                  value: ru-central1
+                - name: S3_BUCKET
+                  valueFrom:
+                    configMapKeyRef:
+                      name: minecraft-backup-config
+                      key: bucket-name
+                - name: RCON_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ .Values.secrets.name }}
+                      key: rcon-password
+              command:
+                - /bin/bash
+                - -ec
+                - |
+                  curl -fsSL -o /usr/local/bin/kubectl \
+                    "https://dl.k8s.io/release/v1.32.0/bin/linux/amd64/kubectl"
+                  chmod +x /usr/local/bin/kubectl
+                  NS="{{ .Release.Namespace }}"
+                  POD=$(kubectl get pod -n "${NS}" -l app=minecraft \
+                    -o jsonpath='{.items[0].metadata.name}')
+                  echo "Saving world on pod ${POD}..."
+                  kubectl exec -n "${NS}" "${POD}" -c minecraft -- \
+                    rcon-cli --password "${RCON_PASSWORD}" save-all
+                  BACKUP="world-$(date -u +%Y%m%d-%H%M%S).tar.gz"
+                  echo "Uploading ${BACKUP} to s3://${S3_BUCKET}/"
+                  kubectl exec -n "${NS}" "${POD}" -c minecraft -- \
+                    tar czf - -C /data world \
+                    | aws s3 cp - "s3://${S3_BUCKET}/${BACKUP}" \
+                      --endpoint-url https://storage.yandexcloud.net
+                  echo "Backup complete: ${BACKUP}"
+{{- end }}

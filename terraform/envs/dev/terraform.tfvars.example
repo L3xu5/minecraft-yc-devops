@@ -1,0 +1,17 @@
+# Скопируй в terraform.tfvars и заполни значения:
+# cp terraform.tfvars.example terraform.tfvars
+
+folder_id   = "b1gxxxxxxxxxx"
+zone        = "ru-central1-a"
+k8s_version = "1.32"
+
+node_count     = 1
+node_memory_gb = 8
+cluster_name   = "minecraft-k8s"
+
+enable_backups            = true
+enable_lockbox            = true
+enable_container_registry = true
+enable_dns                = false
+
+backup_bucket_name = "minecraft-world-backup-YOUR-FOLDER-SUFFIX"

@@ -1,0 +1,20 @@
+# Production values — image from Yandex Container Registry
+# Заполняется deploy-v2.sh: --set image.repository=cr.yandex/...
+
+image:
+  pullPolicy: Always
+
+persistence:
+  existingClaim: minecraft-data
+
+minecraft:
+  onlineMode: false
+  type: PAPER
+  memory: 3G
+
+backup:
+  enabled: true
+  bucketName: minecraft-world-backup-b1gqbqg5
+
+watchdog:
+  enabled: true

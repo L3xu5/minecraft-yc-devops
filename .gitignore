@@ -1,0 +1,17 @@
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+.terraform.lock.hcl
+crash.log
+
+# Secrets
+k8s/apps/minecraft/secret.yaml
+*.pem
+*.key
+yc-key.json
+
+# OS
+.DS_Store

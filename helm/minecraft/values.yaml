@@ -1,0 +1,44 @@
+# Переопредели в values-prod.yaml или --set image.repository=cr.yandex/...
+image:
+  repository: itzg/minecraft-server
+  tag: latest
+  pullPolicy: IfNotPresent
+
+minecraft:
+  type: PAPER
+  memory: 3G
+  onlineMode: false
+  maxPlayers: 10
+  difficulty: normal
+  spawnProtection: 0
+  version: ""  # пусто = latest Paper
+
+persistence:
+  enabled: true
+  existingClaim: minecraft-data  # использовать существующий PVC (мир сохранён)
+  storageClass: yc-network-ssd
+  size: 20Gi
+
+service:
+  type: LoadBalancer
+  port: 25565
+
+resources:
+  requests:
+    cpu: 500m
+    memory: 3Gi
+  limits:
+    cpu: "2"
+    memory: 4Gi
+
+backup:
+  enabled: true
+  schedule: "0 */6 * * *"
+  bucketName: ""  # задаётся deploy-v2.sh
+
+watchdog:
+  enabled: true
+  schedule: "*/15 * * * *"
+
+secrets:
+  name: minecraft-secrets

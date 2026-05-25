@@ -1,0 +1,76 @@
+{{- if .Values.watchdog.enabled }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: minecraft-watchdog
+  labels:
+    {{- include "minecraft.labels" . | nindent 4 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: minecraft-watchdog
+  labels:
+    {{- include "minecraft.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+  - apiGroups: ["batch"]
+    resources: ["jobs", "cronjobs"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: minecraft-watchdog
+  labels:
+    {{- include "minecraft.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: minecraft-watchdog
+subjects:
+  - kind: ServiceAccount
+    name: minecraft-watchdog
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: minecraft-watchdog
+  labels:
+    {{- include "minecraft.labels" . | nindent 4 }}
+spec:
+  schedule: {{ .Values.watchdog.schedule | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: minecraft-watchdog
+          restartPolicy: OnFailure
+          containers:
+            - name: watchdog
+              image: alpine/k8s:1.32.1
+              command:
+                - /bin/bash
+                - -ec
+                - |
+                  NS="{{ .Release.Namespace }}"
+                  READY=$(kubectl get pod -n "${NS}" -l app=minecraft \
+                    -o jsonpath='{.items[0].status.containerStatuses[0].ready}' 2>/dev/null || echo "false")
+                  if [[ "${READY}" != "true" ]]; then
+                    echo "ALERT: Minecraft pod is NOT ready"
+                    exit 1
+                  fi
+                  FAILED=$(kubectl get jobs -n "${NS}" \
+                    -o jsonpath='{range .items[?(@.status.failed>=1)]}{.metadata.name}{"\n"}{end}' \
+                    | grep -E 'backup|minecraft-world-backup' | head -1 || true)
+                  if [[ -n "${FAILED}" ]]; then
+                    echo "ALERT: Backup job failed: ${FAILED}"
+                    exit 1
+                  fi
+                  echo "OK: Minecraft pod ready, no recent backup failures"
+{{- end }}

@@ -1,0 +1,88 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+env:
+  TF_DIR: terraform/envs/dev
+  HELM_CHART: helm/minecraft
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup OpenTofu
+        uses: opentofu/setup-opentofu@v1
+        with:
+          tofu_version: 1.12.0
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v4
+
+      - name: Terraform validate
+        working-directory: ${{ env.TF_DIR }}
+        run: |
+          tofu init -backend=false
+          tofu validate
+
+      - name: Helm lint
+        run: |
+          helm lint ${{ env.HELM_CHART }}
+          helm template minecraft ${{ env.HELM_CHART }} -f ${{ env.HELM_CHART }}/values-prod.yaml > /tmp/minecraft.yaml
+          kubectl apply --dry-run=client -f /tmp/minecraft.yaml 2>/dev/null || true
+
+  deploy:
+    needs: validate
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup OpenTofu
+        uses: opentofu/setup-opentofu@v1
+        with:
+          tofu_version: 1.12.0
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v4
+
+      - name: Install yc CLI
+        run: |
+          curl -sSL https://storage.yandexcloud.net/yandexcloud-yc/install.sh | bash -s -- -i /usr/local/yandex-cloud -n
+          echo "/usr/local/yandex-cloud/bin" >> $GITHUB_PATH
+
+      - name: Configure Yandex Cloud
+        env:
+          YC_TOKEN: ${{ secrets.YC_TOKEN }}
+          YC_FOLDER_ID: ${{ secrets.YC_FOLDER_ID }}
+        run: |
+          yc config set folder-id "${YC_FOLDER_ID}"
+
+      - name: Terraform apply
+        if: env.YC_TOKEN != ''
+        env:
+          YC_TOKEN: ${{ secrets.YC_TOKEN }}
+        working-directory: ${{ env.TF_DIR }}
+        run: |
+          tofu init
+          tofu apply -auto-approve
+
+      - name: Deploy Minecraft Helm chart
+        if: env.YC_TOKEN != ''
+        env:
+          YC_TOKEN: ${{ secrets.YC_TOKEN }}
+        run: |
+          yc managed-kubernetes cluster get-credentials --name minecraft-k8s --external --force
+          BUCKET=$(tofu -chdir=${{ env.TF_DIR }} output -raw backup_bucket_name)
+          REGISTRY=$(tofu -chdir=${{ env.TF_DIR }} output -raw container_registry_id)
+          helm upgrade --install minecraft ${{ env.HELM_CHART }} \
+            -n minecraft --create-namespace \
+            -f ${{ env.HELM_CHART }}/values-prod.yaml \
+            --set backup.bucketName="${BUCKET}" \
+            --set image.repository="cr.yandex/${REGISTRY}/minecraft-server" \
+            --set image.tag=latest \
+            --wait --timeout 10m

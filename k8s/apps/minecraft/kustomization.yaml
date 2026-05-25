@@ -1,0 +1,20 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: minecraft
+
+resources:
+  - namespace.yaml
+  - pvc.yaml
+  - deployment.yaml
+  - service.yaml
+  - backup-rbac.yaml
+  - backup-cronjob.yaml
+  - watchdog-cronjob.yaml
+
+# ConfigMap minecraft-backup-config создаётся scripts/deploy-platform.sh
+
+# Secret создаётся отдельно (не храним в git):
+# kubectl create secret generic minecraft-secrets \
+#   --from-literal=rcon-password='your-password' \
+#   -n minecraft

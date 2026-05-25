@@ -1,0 +1,28 @@
+# kube-prometheus-stack values (Grafana с LoadBalancer)
+grafana:
+  enabled: true
+  adminPassword: changeme-grafana
+  service:
+    type: LoadBalancer
+    port: 80
+  persistence:
+    enabled: false
+
+prometheus:
+  enabled: true
+  prometheusSpec:
+    retention: 7d
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+
+alertmanager:
+  enabled: true
+
+defaultRules:
+  create: true
+
+kubeStateMetrics:
+  enabled: true
+
+nodeExporter:
+  enabled: true
