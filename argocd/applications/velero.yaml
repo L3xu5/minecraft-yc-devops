@@ -18,9 +18,21 @@ spec:
   destination:
     server: https://kubernetes.default.svc
     namespace: velero
+  ignoreDifferences:
+    - group: apiextensions.k8s.io
+      kind: CustomResourceDefinition
+      jqPathExpressions:
+        - .spec.conversion
+        - .spec.preserveUnknownFields
+    - group: batch
+      kind: Job
+      name: velero-upgrade-crds
+      jqPathExpressions:
+        - .
   syncPolicy:
     automated:
       prune: true
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
+      - SkipHooks=true

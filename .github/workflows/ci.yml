@@ -97,9 +97,11 @@ jobs:
           yc managed-kubernetes cluster get-credentials --name minecraft-k8s --external --force
 
       - name: Sync Argo CD applications
+        env:
+          ARGOCD_NAMESPACE: argocd
         run: |
           kubectl apply -f argocd/applications/platform-root.yaml
           for app in minecraft external-secrets kube-prometheus fluent-bit velero; do
-            argocd app sync "$app" --core --prune || true
+            argocd app sync "$app" --core --argocd-namespace argocd --prune || true
           done
-          argocd app wait minecraft --core --health --timeout 600
+          argocd app wait minecraft --core --argocd-namespace argocd --health --timeout 600
