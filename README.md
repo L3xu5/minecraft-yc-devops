@@ -238,7 +238,7 @@ kubectl get externalsecret -n minecraft    # SecretSynced
 | `enable_dns` | `false` | Cloud DNS A-record |
 | `enable_node_autoscaling` | `true` | min/max нод (1–2) |
 | `node_preemptible` | `true` | Прерываемая worker VM (~70% дешевле; возможны простои) |
-| `node_memory_gb` | `64` | Worker (max 4 vCPU); Minecraft heap 58G |
+| `node_memory_gb` | `64` | Worker (max 4 vCPU); Minecraft heap 52G |
 | `node_count` | `1` | Начальный размер node group |
 
 Outputs:
@@ -456,7 +456,7 @@ kubectl annotate application minecraft -n argocd argocd.argoproj.io/refresh=hard
 | Storage + Lockbox + Logging | ~1 500–2 000 |
 | **Итого** | **~17 600–18 100** |
 
-Minecraft: **58G** heap, pod **60Gi**. Worker без public IP — egress через NAT-шлюз.
+Minecraft: **52G** heap, pod **54Gi** (максимум на 64 GB worker с platform pods).
 
 ```bash
 cd terraform/envs/dev && tofu destroy
